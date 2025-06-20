@@ -1,6 +1,6 @@
 # 🧾 PassKit
 
-![PassKit Logo](https://github.com/VelisCore/PassKit/blob/main/PassKit/Assets.xcassets/AppIcon.appiconset/512@1x.png?raw=true)
+![PassKit Logo](https://github.com/VelisCore/PassKit/blob/main/PassKit/Assets.xcassets/AppIcon.appiconset/256@1x.png?raw=true)
 
 **PassKit** is a macOS GUI frontend for [Legacy iOS Kit](https://github.com/LukeZGD/Legacy-iOS-Kit), a tool that helps bypass Setup.app on legacy iOS devices — ideal for restoring usability to older, unsupported iPhones and iPads.
 

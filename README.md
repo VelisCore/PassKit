@@ -56,6 +56,14 @@ Coming soon:
 
 ---
 
+---
+
+## 🤖 AI Assistance
+
+Parts of this project — including code comments, README formatting, devlogs, and minor bug fixes — were enhanced using **GitHub Copilot** and **Apple Intelligence** on **macOS 26 Beta** with **Xcode Beta**.  
+These tools helped streamline development and improve clarity without altering the core logic or intent.
+
+
 ## 🛡 License
 
 [MIT](https://github.com/VelisCore/PassKit/blob/main/LICENSE) — do what you want, just give credit.

@@ -394,6 +394,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -403,10 +404,25 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = PassKit;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
+				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/PassKit/Legacy-iOS-Kit_macos_v25/bin/macos/lib",
+					"$(PROJECT_DIR)/PassKit/Legacy-iOS-Kit_macos_v25/bin/macos/arm64/lib",
+					"$(PROJECT_DIR)/PassKit/Legacy-iOS-Kit_macos_v25/resources/jailbreak/g1lbertJB/payload/debs",
+					"$(PROJECT_DIR)/PassKit/Legacy-iOS-Kit_macos_v25/resources/jailbreak/g1lbertJB/payload/common",
+					"$(PROJECT_DIR)/PassKit/Legacy-iOS-Kit_macos_v25/resources/jailbreak/g1lbertJB/payload/evasi0n",
+					"$(PROJECT_DIR)/PassKit/LIOSK/bin/macos/arm64/lib",
+					"$(PROJECT_DIR)/PassKit/LIOSK/bin/macos/lib",
+					"$(PROJECT_DIR)/PassKit/LIOSK/resources/jailbreak/g1lbertJB/payload/common",
+					"$(PROJECT_DIR)/PassKit/LIOSK/resources/jailbreak/g1lbertJB/payload/debs",
+					"$(PROJECT_DIR)/PassKit/LIOSK/resources/jailbreak/g1lbertJB/payload/evasi0n",
 				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = veliscore.PassKit;
@@ -425,6 +441,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -434,10 +451,25 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = PassKit;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
+				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/PassKit/Legacy-iOS-Kit_macos_v25/bin/macos/lib",
+					"$(PROJECT_DIR)/PassKit/Legacy-iOS-Kit_macos_v25/bin/macos/arm64/lib",
+					"$(PROJECT_DIR)/PassKit/Legacy-iOS-Kit_macos_v25/resources/jailbreak/g1lbertJB/payload/debs",
+					"$(PROJECT_DIR)/PassKit/Legacy-iOS-Kit_macos_v25/resources/jailbreak/g1lbertJB/payload/common",
+					"$(PROJECT_DIR)/PassKit/Legacy-iOS-Kit_macos_v25/resources/jailbreak/g1lbertJB/payload/evasi0n",
+					"$(PROJECT_DIR)/PassKit/LIOSK/bin/macos/arm64/lib",
+					"$(PROJECT_DIR)/PassKit/LIOSK/bin/macos/lib",
+					"$(PROJECT_DIR)/PassKit/LIOSK/resources/jailbreak/g1lbertJB/payload/common",
+					"$(PROJECT_DIR)/PassKit/LIOSK/resources/jailbreak/g1lbertJB/payload/debs",
+					"$(PROJECT_DIR)/PassKit/LIOSK/resources/jailbreak/g1lbertJB/payload/evasi0n",
 				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = veliscore.PassKit;

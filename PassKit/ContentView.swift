@@ -1,130 +1,24 @@
-// PassKit.swift
-// PassKit - Modern macOS App for iOS Device Tools
-// Created with SwiftUI, macOS 14+
-// All-in-one code file – ready to build & run
-
 import SwiftUI
-import Combine
 
-// MARK: - App State Model
-
-class PassKitAppModel: ObservableObject {
-    // Simulated Device Connection State
-    @Published var isDeviceConnected: Bool = true // Simulate connection
-    @Published var deviceInfo: DeviceInfo = DeviceInfo.mock
-    @Published var jailbreakVersion: String = ""
-    @Published var showWelcome: Bool = true
-    @Published var selectedTab: SidebarTab? = .restore
-    
-    // IPSW Downloader State
-    @Published var ipswDevice: String = "iPhone 12"
-    @Published var ipswVersion: String = "16.7.6"
-    @Published var ipswDownloading: Bool = false
-    @Published var ipswProgress: Double = 0
-    @Published var ipswSavePath: URL? = nil
-    
-    // Utilities State
-    @Published var isProcessingUtility: Bool = false
-    @Published var processingUtility: UtilityAction? = nil
-    
-    // Info panel Timer
-    var deviceUpdateTimer: Timer?
-    
-    // Mock: For state preservation
-    @Published var lastSHSHBlobSavePath: URL?
-    
-    init() {
-        // Simulate device "connect" by updating info periodically
-        deviceUpdateTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { _ in
-            // Partial (mock) updates: For actual device polling, use IOKit
-            if self.isDeviceConnected {
-                self.deviceInfo = DeviceInfo.mock.updatedRandom()
-            }
-        }
-    }
+struct IPSWDevice: Identifiable, Codable, Equatable, Hashable {
+    var id: String { identifier }
+    let name: String
+    let identifier: String
 }
 
-// MARK: - Sidebar
-
-enum SidebarTab: Hashable {
-    case restore, jailbreak, shsh, ipsw, utilities, info
-    
-    var label: String {
-        switch self {
-        case .restore: return "Restore"
-        case .jailbreak: return "Jailbreak"
-        case .shsh: return "SHSH Blobs"
-        case .ipsw: return "IPSW"
-        case .utilities: return "Utilities"
-        case .info: return "Device Info"
-        }
-    }
-    
-    var systemImage: String {
-        switch self {
-        case .restore: return "arrow.triangle.2.circlepath"
-        case .jailbreak: return "lock.open"
-        case .shsh: return "doc.badge.ellipsis"
-        case .ipsw: return "square.and.arrow.down"
-        case .utilities: return "wrench.and.screwdriver"
-        case .info: return "info.circle"
-        }
-    }
+struct IPSWFirmware: Identifiable, Codable, Equatable, Hashable {
+    var id: String { buildid }
+    let version: String
+    let buildid: String
+    let signed: Bool
+    let url: String
 }
 
-// MARK: - Device Info Model
-
-struct DeviceInfo: Identifiable, Equatable {
-    let id = UUID()
-    var name: String
-    var model: String
-    var modelNumber: String
-    var iOSVersion: String
-    var jailbroken: Bool
-    var buildNumber: String
-    var ecid: String
-    var dependencies: [String]
-    var systemFlags: [String]
-    var macOSVersion: String
-    var macModel: String
-    var ipswPath: String
-    
-    static var mock: DeviceInfo {
-        DeviceInfo(
-            name: "John's iPhone",
-            model: "iPhone 12",
-            modelNumber: "A2172",
-            iOSVersion: "16.7.6",
-            jailbroken: false,
-            buildNumber: "20G123",
-            ecid: "0x1234567890ABCDEF",
-            dependencies: ["libimobiledevice", "ideviceinstaller", "usbmuxd"],
-            systemFlags: [
-                "flag_jb_enabled",
-                "flag_apnonce_set",
-                "flag_lwvm_support",
-                "flag_usb_allowed",
-                "flag_tethered_ok"
-            ],
-            macOSVersion: ProcessInfo.processInfo.operatingSystemVersionString,
-            macModel: "MacBookPro18,3",
-            ipswPath: "\(NSHomeDirectory())/Documents/IPSWs"
-        )
-    }
-    
-    func updatedRandom() -> DeviceInfo {
-        // Only iOS version or Jailbreak status might change for demo
-        var new = self
-        if Bool.random() {
-            let frmw = ["16.7.6", "17.0", "17.3", "15.7.2"].randomElement()!
-            new.iOSVersion = frmw
-        }
-        if Bool.random() { new.jailbroken.toggle() }
-        return new
-    }
+struct IPSWDeviceInfo: Codable {
+    let name: String
+    let identifier: String
+    let firmwares: [IPSWFirmware]
 }
-
-// MARK: - Utility Actions
 
 enum UtilityAction: String, CaseIterable, Identifiable {
     case pwnedDFU, clearNVRAM, toggleExploit, sshRamdisk, updateDateTime, dfuHelper
@@ -149,6 +43,32 @@ enum UtilityAction: String, CaseIterable, Identifiable {
         case .sshRamdisk: return "terminal"
         case .updateDateTime: return "clock"
         case .dfuHelper: return "arrow.up.arrow.down"
+        }
+    }
+}
+
+// MARK: - Sidebar
+
+enum SidebarTab: Hashable {
+    case restore, shsh, ipsw, utilities, info
+    
+    var label: String {
+        switch self {
+        case .restore: return "Restore"
+        case .shsh: return "SHSH Blobs"
+        case .ipsw: return "IPSW"
+        case .utilities: return "Utilities"
+        case .info: return "Device Info"
+        }
+    }
+    
+    var systemImage: String {
+        switch self {
+        case .restore: return "arrow.triangle.2.circlepath"
+        case .shsh: return "doc.badge.ellipsis"
+        case .ipsw: return "square.and.arrow.down"
+        case .utilities: return "wrench.and.screwdriver"
+        case .info: return "info.circle"
         }
     }
 }
@@ -192,65 +112,117 @@ struct VisualEffectView: NSViewRepresentable {
 struct WelcomeScreen: View {
     var onStart: () -> Void
     @Environment(\.colorScheme) var colorScheme
-    
+    @State private var showInstaller = false
+    @StateObject private var installer = DependencyInstaller()
+
     var body: some View {
         VStack(spacing: 36) {
             Spacer()
-            // Logo/Brand
-            HStack(spacing: 20) {
-                Image(systemName: "key.fill")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 54, height: 54)
-                    .foregroundStyle(LinearGradient(
-                        colors: [Color.accentColor, .primary],
-                        startPoint: .topLeading, endPoint: .bottomTrailing
-                    ))
-                    .shadow(color: .black.opacity(0.15), radius: 8, x: 0, y: 3)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("PassKit")
-                        .font(.largeTitle.bold())
-                        .foregroundColor(.primary)
-                        .shadow(color: .black.opacity(0.08), radius: 2, x: 0, y: 2)
-                    Text("iOS Restoring & IPSW Toolkit")
-                        .font(.title3.weight(.semibold))
-                        .foregroundColor(.secondary)
+
+            if showInstaller {
+                // DEPENDENCY INSTALLER VIEW
+                VStack(spacing: 20) {
+                    Text("Install Required Dependencies")
+                        .font(.title.bold())
+                        .padding(.top)
+
+                    List(installer.logs, id: \.self) { log in
+                        Text(log)
+                            .font(.system(size: 14, design: .monospaced))
+                            .foregroundColor(log.contains("❌") ? .red : .primary)
+                            .padding(8)
+                            .background(
+                                RoundedRectangle(cornerRadius: 16)
+                                    
+                                    .shadow(radius: 1)
+                            )
+                    }
+                    .frame(height: 360)
+
+                    if installer.installing {
+                        ProgressView("Installing...")
+                            .progressViewStyle(CircularProgressViewStyle())
+                    }
+
+                    Button(installer.finished ? "Done" : "Start Installation") {
+                        if installer.finished {
+                            showInstaller = false
+                        } else {
+                            installer.installAll()
+                        }
+                    }
+                    .disabled(installer.installing)
+                    .buttonStyle(.borderedProminent)
+                    .padding(.bottom)
                 }
+
+            } else {
+                // WELCOME CONTENT
+                HStack(spacing: 20) {
+                    Image("AppIconInApp")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 54, height: 54)
+                        .foregroundStyle(LinearGradient(
+                            colors: [Color.accentColor, .primary],
+                            startPoint: .topLeading, endPoint: .bottomTrailing
+                        ))
+                        .shadow(color: .black.opacity(0.15), radius: 8, x: 0, y: 3)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("PassKit")
+                            .font(.largeTitle.bold())
+                        Text("iOS Restoring & IPSW Toolkit")
+                            .font(.title3.weight(.semibold))
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                Text("Welcome to PassKit, a modern all-in-one utility for managing, restoring, and jailbreaking iOS devices. Fully native. Free. Sleek. Secure.")
+                    .font(.title2)
+                    .multilineTextAlignment(.center)
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 60)
+
+                Spacer()
+
+                HStack(spacing: 16) {
+                    Button(action: onStart) {
+                        Label("Start", systemImage: "arrow.right.circle.fill")
+                            .font(.title2.bold())
+                            .padding(.horizontal, 34)
+                            .padding(.vertical, 16)
+                            .background(
+                                Capsule().fill(colorScheme == .dark
+                                               ? Color.white.opacity(0.15)
+                                               : Color.black.opacity(0.09))
+                                    .shadow(color: (colorScheme == .dark
+                                                    ? Color.white : Color.black).opacity(0.09), radius: 8)
+                            )
+                            .overlay(Capsule().stroke(Color.accentColor, lineWidth: 2))
+                    }
+                    .buttonStyle(.plain)
+
+                    Button(action: { showInstaller = true }) {
+                        Label("Install Dependencies", systemImage: "hammer.fill")
+                            .font(.title2.bold())
+                            .padding(.horizontal, 34)
+                            .padding(.vertical, 16)
+                            .background(RoundedRectangle(cornerRadius: 16).fill(Color.accentColor.opacity(0.2)))
+                    }
+                    .overlay(Capsule().stroke(Color.accentColor, lineWidth: 2))
+                    .buttonStyle(.plain)
+                }
+
+                Spacer().frame(height: 36)
             }
-            // Subtitle
-            Text("Welcome to PassKit, a modern all-in-one utility for managing, restoring, and jailbreaking iOS devices. Fully native. Free. Sleek. Secure.")
-                .font(.title2)
-                .multilineTextAlignment(.center)
-                .foregroundColor(.secondary)
-                .padding(.horizontal, 60)
-            Spacer()
-            // Start Button
-            Button(action: onStart) {
-                Label("Start", systemImage: "arrow.right.circle.fill")
-                    .font(.title2.bold())
-                    .padding(.horizontal, 34)
-                    .padding(.vertical, 16)
-                    .background(
-                        Capsule().fill(colorScheme == .dark
-                                       ? Color.white.opacity(0.15)
-                                       : Color.black.opacity(0.09))
-                            .shadow(color: (colorScheme == .dark
-                                            ? Color.white : Color.black).opacity(0.09), radius: 8)
-                    )
-                    .overlay(
-                        Capsule().stroke(Color.accentColor, lineWidth: 2)
-                    )
-            }
-            .buttonStyle(.plain)
-            Spacer().frame(height: 36)
         }
+        .padding()
         .background(
-            RoundedRectangle(cornerRadius: 36, style: .continuous)
+            RoundedRectangle(cornerRadius: 0, style: .continuous)
                 .fill(.ultraThinMaterial)
                 .shadow(color: .black.opacity(0.13), radius: 36, y: 18)
         )
-        .transition(.asymmetric(insertion: .opacity.combined(with: .scale),
-                                removal: .opacity))
+        .transition(.opacity.combined(with: .scale))
         .zIndex(100)
     }
 }
@@ -268,7 +240,7 @@ struct AppContentView: View {
         NavigationSplitView {
             List(selection: $model.selectedTab) {
                 Section {
-                    ForEach([SidebarTab.restore, .jailbreak, .shsh, .ipsw, .utilities, .info], id: \.self) { tab in
+                    ForEach([SidebarTab.restore, .shsh, .ipsw, .utilities, .info], id: \.self) { tab in
                         Label(tab.label, systemImage: tab.systemImage)
                             .tag(tab as SidebarTab?)
                             .padding(.vertical, 4)
@@ -280,35 +252,35 @@ struct AppContentView: View {
             .frame(minWidth: 190, idealWidth: 210, maxWidth: 260)
         } detail: {
             // Adaptive detail content
-            ZStack {
-                switch model.selectedTab ?? .restore {
-                case .restore: RestoreTabView()
-                case .jailbreak: JailbreakTabView()
-                case .shsh: SHSHTabView()
-                case .ipsw: IPSWTabView()
-                case .utilities: UtilitiesTabView()
-                case .info: InfoTabView()
+            scrollableIfNeeded(
+                ZStack {
+                    switch model.selectedTab ?? .restore {
+                    case .restore: RestoreTabView()
+                    case .shsh: SHSHTabView()
+                    case .ipsw: IPSWTabView()
+                    case .utilities: UtilitiesTabView()
+                    case .info: InfoTabView()
+                    }
                 }
-            }
-            .padding()
-            .animation(.easeInOut(duration: 0.22), value: model.selectedTab)
-            .background(
-                RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .shadow(color: .black.opacity(0.13), radius: 24, y: 21)
+                .padding()
+                .animation(.easeInOut(duration: 0.22), value: model.selectedTab)
+                .background(
+                    RoundedRectangle(cornerRadius: 28, style: .continuous)
+                        .fill(.ultraThinMaterial)
+                        .shadow(color: .black.opacity(0.13), radius: 24, y: 21)
+                )
+                .padding([.horizontal, .vertical], 20)
             )
-            .padding([.horizontal, .vertical], 20)
-            .scrollableIfNeeded()
         }
     }
 }
 
 extension View {
     // Scrollable modifier if vertical/horiz content could overflow (adaptive)
-    func scrollableIfNeeded() -> some View {
+    func scrollableIfNeeded<Content: View>(_ content: Content) -> some View {
         GeometryReader { geo in
             ScrollView(.vertical, showsIndicators: true) {
-                self
+                content
                     .frame(minHeight: geo.size.height)
             }
         }
@@ -316,81 +288,86 @@ extension View {
 }
 
 // MARK: - Restore / Downgrade Tab
-
 struct RestoreTabView: View {
-    @EnvironmentObject var model: PassKitAppModel
-    @State private var selectedRestoreOption: RestoreOption = .powdersn0w
-    @State private var selectedCustomBlobFile: URL? = nil
+    @State private var selectedIPSWFile: URL? = nil
     @State private var isPerformingRestore: Bool = false
-    
-    enum RestoreOption: String, CaseIterable, Identifiable {
-        case powdersn0w, latest, custom
-        var id: String { rawValue }
-        var label: String {
-            switch self {
-            case .powdersn0w: return "powdersn0w (any iOS)"
-            case .latest: return "Latest iOS (7.1.2)"
-            case .custom: return "Other (use SHSH Blobs)"
+    @State private var restoreError: String? = nil
+
+    func runRestore() {
+        guard let ipswFile = selectedIPSWFile else { return }
+        isPerformingRestore = true
+        restoreError = nil
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            let process = Process()
+            process.launchPath = "/usr/local/bin/idevicerestore" // Update if needed!
+            process.arguments = [ipswFile.path]
+            
+            let pipe = Pipe()
+            process.standardOutput = pipe
+            process.standardError = pipe
+
+            do {
+                try process.run()
+            } catch {
+                DispatchQueue.main.async {
+                    restoreError = "Failed to start restore tool: \(error.localizedDescription)"
+                    isPerformingRestore = false
+                }
+                return
             }
-        }
-        var icon: String {
-            switch self {
-            case .powdersn0w: return "flame"
-            case .latest: return "star.fill"
-            case .custom: return "folder.badge.plus"
+
+            process.waitUntilExit()
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            let output = String(data: data, encoding: .utf8) ?? "(no output)"
+
+            DispatchQueue.main.async {
+                isPerformingRestore = false
+                if process.terminationStatus == 0 {
+                    restoreError = nil
+                    // Optionally display a success notification here!
+                } else {
+                    restoreError = "Restore failed.\n\nOutput:\n\(output)"
+                }
             }
         }
     }
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
             HStack {
-                Label("Restore / Downgrade", systemImage: "arrow.triangle.2.circlepath")
+                Label("Restore iOS Device", systemImage: "arrow.triangle.2.circlepath")
                     .font(.title2.bold())
                 Spacer()
-                    .frame(width: 16)
                 if isPerformingRestore {
                     ProgressView().scaleEffect(0.85)
                 }
             }
-            Text("Choose your preferred method to restore or downgrade your connected iOS device. Use SHSH Blobs for custom firmware.")
+            Text("Select your IPSW firmware file and restore your connected device. All data will be erased!")
                 .foregroundColor(.secondary)
                 .font(.subheadline)
                 .padding(.bottom, 8)
-            
-            Picker(selection: $selectedRestoreOption, label: Text("Restore Option")) {
-                ForEach(RestoreOption.allCases) { option in
-                    Label(option.label, systemImage: option.icon).tag(option)
-                }
-            }
-            .pickerStyle(RadioGroupPickerStyle())
-            .padding(.horizontal, 10)
-            
-            if selectedRestoreOption == .custom {
-                Button {
-                    let panel = NSOpenPanel()
-                    panel.allowedFileTypes = ["shsh", "shsh2", "plist", "blob"]
-                    panel.allowsMultipleSelection = false
-                    if panel.runModal() == .OK, let url = panel.url {
-                        selectedCustomBlobFile = url
-                    }
-                } label: {
-                    Label(
-                        selectedCustomBlobFile == nil ? "Select SHSH Blob..." :
-                            "Selected: \(selectedCustomBlobFile!.lastPathComponent)",
-                        systemImage: "doc.badge.ellipsis"
-                    )
-                }
-            }
-            
-            Spacer(minLength: 12)
-            
+
             Button {
-                isPerformingRestore = true
-                // Simulate restore
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
-                    isPerformingRestore = false
+                let panel = NSOpenPanel()
+                panel.allowedFileTypes = ["ipsw"]
+                panel.allowsMultipleSelection = false
+                panel.canChooseDirectories = false
+                if panel.runModal() == .OK, let url = panel.url {
+                    selectedIPSWFile = url
                 }
+            } label: {
+                Label(
+                    selectedIPSWFile == nil ? "Select IPSW File..." :
+                    "Selected: \(selectedIPSWFile!.lastPathComponent)",
+                    systemImage: "doc.badge.ellipsis"
+                )
+            }
+
+            Spacer(minLength: 12)
+
+            Button {
+                runRestore()
             } label: {
                 Label("Start Restore", systemImage: "arrow.down.circle.fill")
                     .font(.headline)
@@ -399,81 +376,27 @@ struct RestoreTabView: View {
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
-            .disabled(isPerformingRestore ||
-                     (selectedRestoreOption == .custom && selectedCustomBlobFile == nil))
+            .disabled(isPerformingRestore || selectedIPSWFile == nil)
             .animation(.easeOut(duration: 0.19), value: isPerformingRestore)
-            
+
             if isPerformingRestore {
                 Text("Restoring device... Please wait.")
                     .font(.callout).foregroundColor(.primary)
                     .padding(.top, 12)
                     .transition(.opacity)
             }
-            
+            if let err = restoreError {
+                Text(err)
+                    .font(.footnote)
+                    .foregroundColor(.red)
+                    .padding(.top, 10)
+                    .transition(.opacity)
+            }
+
             Spacer()
         }
         .padding(30)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    }
-}
-
-// MARK: - Jailbreak Tab
-
-struct JailbreakTabView: View {
-    @EnvironmentObject var model: PassKitAppModel
-    @State private var isJailbreaking: Bool = false
-    @FocusState private var inputFocused: Bool
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 21) {
-            Label("Jailbreak Device", systemImage: "lock.open")
-                .font(.title2.bold())
-            
-            Text("Enter your device's current iOS version, then begin the jailbreak process. (Simulated for demo!)")
-                .foregroundColor(.secondary)
-                .font(.subheadline)
-            
-            HStack {
-                Image(systemName: "gearshape")
-                TextField("iOS Version (e.g. 16.7.6)", text: $model.jailbreakVersion)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 160)
-                    .focused($inputFocused)
-                Spacer()
-            }.padding(.vertical, 7)
-            
-            Button {
-                inputFocused = false
-                isJailbreaking = true
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
-                    isJailbreaking = false
-                }
-            } label: {
-                if isJailbreaking {
-                    HStack {
-                        ProgressView().scaleEffect(0.8)
-                        Text("Jailbreaking...")
-                    }
-                } else {
-                    Label("Start Jailbreak", systemImage: "lock.open.fill")
-                }
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .disabled(model.jailbreakVersion.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isJailbreaking)
-            .padding(.top, 5)
-            
-            if isJailbreaking {
-                Text("Applying exploit and patching system... (simulated)")
-                    .font(.footnote)
-                    .foregroundColor(.secondary)
-                    .transition(.opacity)
-            }
-            Spacer()
-        }
-        .padding(30)
-        .frame(maxWidth: .infinity, alignment: .topLeading)
-        .animation(.easeInOut(duration: 0.19), value: isJailbreaking)
     }
 }
 
@@ -537,65 +460,85 @@ struct SHSHTabView: View {
     }
 }
 
-// MARK: - IPSW Downloader Tab
-
 struct IPSWTabView: View {
     @EnvironmentObject var model: PassKitAppModel
-    
-    // Simulated list of devices & OS versions
-    let devices = ["iPhone 12", "iPhone 13", "iPhone 15 Pro", "iPad 9", "iPod touch 7th"]
-    let iosVersions = ["15.7.2", "16.7.6", "17.0", "17.3"]
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
             Label("IPSW Downloader", systemImage: "square.and.arrow.down")
                 .font(.title2.bold())
-            
+
             Text("Download official signed IPSW files for your selected device and firmware version.")
                 .foregroundColor(.secondary)
                 .font(.subheadline)
-            
-            HStack(alignment: .center, spacing: 18) {
-                // Device Picker
-                VStack(alignment: .leading, spacing: 6) {
+
+            HStack(alignment: .top, spacing: 20) {
+                // MARK: - Device Picker
+                VStack(alignment: .leading, spacing: 8) {
                     Text("Device")
-                    Picker("", selection: $model.ipswDevice) {
-                        ForEach(devices, id: \.self) { device in
-                            Text(device)
+                        .font(.headline)
+
+                    Picker("Device", selection: $model.selectedDevice) {
+                        ForEach(model.ipswDevices) { device in
+                            Text(device.name).tag(Optional(device))
                         }
                     }
-                    .pickerStyle(PopUpButtonPickerStyle())
-                    .frame(width: 170)
+                    .onChange(of: model.selectedDevice) { newDevice in
+                        Task {
+                            if let dev = newDevice {
+                                await model.loadFirmwares(for: dev)
+                                model.selectedFirmware = nil
+                            }
+                        }
+                    }
+                    .frame(width: 260)
+                    .pickerStyle(MenuPickerStyle())
+
+                    if let selected = model.selectedDevice {
+                        Text("Identifier: \(selected.identifier)")
+                            .font(.footnote)
+                            .foregroundColor(.secondary)
+                    }
                 }
-                // iOS Version Picker
-                VStack(alignment: .leading, spacing: 6) {
+
+                // MARK: - Firmware Picker
+                VStack(alignment: .leading, spacing: 8) {
                     Text("iOS Version")
-                    Picker("", selection: $model.ipswVersion) {
-                        ForEach(iosVersions, id: \.self) { ver in
-                            Text(ver)
+                        .font(.headline)
+
+                    Picker("Firmware", selection: $model.selectedFirmware) {
+                        ForEach(model.ipswFirmwares) { fw in
+                            Text("\(fw.version) (\(fw.buildid))").tag(Optional(fw))
                         }
                     }
-                    .pickerStyle(PopUpButtonPickerStyle())
-                    .frame(width: 130)
+                    .frame(width: 260)
+                    .pickerStyle(MenuPickerStyle())
+
+                    if let fw = model.selectedFirmware {
+                        Text(fw.signed ? "✅ Signed" : "❌ Unsigned")
+                            .font(.footnote)
+                            .foregroundColor(fw.signed ? .green : .red)
+                    }
                 }
-                // File Picker for Save Location
-                VStack(alignment: .leading, spacing: 6) {
+
+                // MARK: - Save Location
+                VStack(alignment: .leading, spacing: 8) {
                     Text("Save Location")
-                    HStack(spacing: 9) {
-                        Button {
+                        .font(.headline)
+
+                    HStack {
+                        Button("Choose Folder") {
                             let panel = NSOpenPanel()
                             panel.canChooseDirectories = true
                             panel.canChooseFiles = false
                             panel.allowsMultipleSelection = false
                             panel.prompt = "Choose"
-                            if panel.runModal() == .OK, let url = panel.url {
-                                model.ipswSavePath = url
+                            if panel.runModal() == .OK {
+                                model.ipswSavePath = panel.url
                             }
-                        } label: {
-                            Label("Choose Folder", systemImage: "folder")
                         }
                         .buttonStyle(.bordered)
-                        .controlSize(.small)
+
                         if let path = model.ipswSavePath {
                             Text(path.lastPathComponent)
                                 .font(.footnote)
@@ -604,44 +547,38 @@ struct IPSWTabView: View {
                     }
                 }
             }
-            .padding(.vertical, 4)
-            
+
+            Divider().padding(.vertical, 10)
+
+            // MARK: - Download Button & Progress
             HStack(spacing: 14) {
                 Button {
-                    model.ipswDownloading = true
-                    model.ipswProgress = 0.0
-                    // Simulate download progress
-                    Timer.scheduledTimer(withTimeInterval: 0.13, repeats: true) { timer in
-                        model.ipswProgress += 0.04 + Double.random(in: 0...0.055)
-                        if model.ipswProgress >= 1 {
-                            model.ipswProgress = 1
-                            model.ipswDownloading = false
-                            timer.invalidate()
-                        }
-                    }
+                    model.startDownload()
                 } label: {
                     if model.ipswDownloading {
                         Label("Downloading...", systemImage: "arrow.down.circle")
+                            .labelStyle(IconOnlyLabelStyle())
                     } else {
                         Label("Download", systemImage: "arrow.down.circle.fill")
                     }
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(model.ipswDownloading || model.ipswSavePath == nil)
-                
+                .disabled(model.ipswDownloading || model.selectedFirmware == nil || model.ipswSavePath == nil)
+
                 if model.ipswDownloading {
                     ProgressView(value: model.ipswProgress)
-                        .frame(width: 150)
-                        .transition(.opacity)
+                        .frame(width: 200)
+                        .progressViewStyle(LinearProgressViewStyle())
                 }
+
+                Spacer()
             }
+
             Spacer()
         }
         .padding(30)
-        .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 }
-
 // MARK: - Utilities Tab
 
 struct UtilitiesTabView: View {
@@ -805,11 +742,6 @@ struct InfoPanel: View {
             HStack {
                 Label("iOS Version", systemImage: "applelogo")
                 Text("\(device.iOSVersion) (\(device.buildNumber))")
-            }
-            HStack {
-                Label("Jailbroken", systemImage: "lock.slash")
-                Text(device.jailbroken ? "Yes" : "No")
-                    .foregroundStyle(device.jailbroken ? Color.pink : Color.secondary)
             }
             Divider().padding(.vertical, 4)
             HStack {

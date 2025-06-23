@@ -217,6 +217,7 @@ struct WelcomeScreen: View {
             }
         }
         .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(
             RoundedRectangle(cornerRadius: 0, style: .continuous)
                 .fill(.ultraThinMaterial)

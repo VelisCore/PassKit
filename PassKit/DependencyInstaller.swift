@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import SwiftUI
+import AppKit
 
 /// Manages installation of Homebrew and dependencies, with live log streaming and cancellation.
 class DependencyInstaller: ObservableObject {
@@ -9,32 +10,39 @@ class DependencyInstaller: ObservableObject {
     @Published var finished = false
     @Published var errorMessage: String?
 
-    private var process: Process?
-    private var outputPipe: Pipe?
-    private var errorPipe: Pipe?
-    
-    private var cancellables = Set<AnyCancellable>()
-
     /// Starts the full installation process.
     func installAll() {
         guard !installing else { return }  // prevent double start
-        
         installing = true
         logs = []
         finished = false
         errorMessage = nil
 
-        // Build the full shell script
         let script = generateInstallScript()
-
-        Task.detached { [weak self] in
-            await self?.runShellScript(script)
+        logs.append("🚀 Opening Terminal to install dependencies...")
+        logs.append("Please follow the instructions and allow any prompts in the Terminal window that appears.")
+        Task {
+            do {
+                try runCommandInTerminal(script)
+                await MainActor.run {
+                    self.logs.append("✅ Installation script launched in Terminal.")
+                    self.finished = true
+                    self.installing = false
+                }
+            } catch {
+                await MainActor.run {
+                    self.logs.append("❌ Failed to open Terminal: \(error.localizedDescription)")
+                    self.errorMessage = error.localizedDescription
+                    self.finished = false
+                    self.installing = false
+                }
+            }
         }
     }
 
     /// Cancels any ongoing installation.
     func cancel() {
-        process?.terminate()
+        // Without direct process control, just update state and log cancellation.
         installing = false
         logs.append("❌ Installation cancelled by user.")
     }
@@ -71,75 +79,22 @@ class DependencyInstaller: ObservableObject {
         """
     }
 
-
-    /// Runs the given shell script and streams output asynchronously.
-    private func runShellScript(_ script: String) async {
-        await MainActor.run { logs.append("🚀 Starting installation...") }
-        
-        let process = Process()
-        self.process = process
-        process.launchPath = "/bin/zsh"
-        process.arguments = ["-c", script]
-
-        let outputPipe = Pipe()
-        let errorPipe = Pipe()
-        self.outputPipe = outputPipe
-        self.errorPipe = errorPipe
-        
-        process.standardOutput = outputPipe
-        process.standardError = errorPipe
-
-        // Handle output asynchronously line by line
-        func readOutput(pipe: Pipe, isError: Bool = false) {
-            let handle = pipe.fileHandleForReading
-            handle.readabilityHandler = { [weak self] fileHandle in
-                let data = fileHandle.availableData
-                guard !data.isEmpty else {
-                    handle.readabilityHandler = nil
-                    return
-                }
-                if let line = String(data: data, encoding: .utf8)?
-                    .trimmingCharacters(in: .whitespacesAndNewlines) {
-                    Task { @MainActor in
-                        if isError {
-                            self?.logs.append("❌ \(line)")
-                        } else {
-                            self?.logs.append(line)
-                        }
-                    }
-                }
+    /// Runs given command script in Terminal using AppleScript.
+    private func runCommandInTerminal(_ script: String) throws {
+        let appleScriptSource = """
+        tell application "Terminal"
+            activate
+            do script "\(script.replacingOccurrences(of: "\"", with: "\\\"").replacingOccurrences(of: "\n", with: "; "))"
+        end tell
+        """
+        var error: NSDictionary?
+        if let scriptObject = NSAppleScript(source: appleScriptSource) {
+            scriptObject.executeAndReturnError(&error)
+            if let error = error {
+                throw NSError(domain: "AppleScriptError", code: 1, userInfo: error as? [String: Any])
             }
-        }
-
-        readOutput(pipe: outputPipe, isError: false)
-        readOutput(pipe: errorPipe, isError: true)
-
-        do {
-            try process.run()
-        } catch {
-            await MainActor.run {
-                self.logs.append("❌ Failed to launch process: \(error.localizedDescription)")
-                self.installing = false
-            }
-            return
-        }
-
-        // Wait until process finishes
-        process.waitUntilExit()
-        
-        // Close readability handlers
-        outputPipe.fileHandleForReading.readabilityHandler = nil
-        errorPipe.fileHandleForReading.readabilityHandler = nil
-        
-        await MainActor.run {
-            if process.terminationStatus == 0 {
-                self.logs.append("✅ Installation completed successfully.")
-            } else {
-                self.logs.append("❌ Installation failed with code \(process.terminationStatus).")
-                self.errorMessage = "Installation failed with code \(process.terminationStatus)."
-            }
-            self.finished = true
-            self.installing = false
+        } else {
+            throw NSError(domain: "AppleScriptError", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to create AppleScript object"])
         }
     }
 }

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://github.com/VelisCore/PassKit/blob/main/PassKit/Assets.xcassets/AppIcon.appiconset/512@1x.png?raw=true" width="120" alt="PassKit Logo">
+  <img src="https://github.com/Velyzo/PassKit/blob/main/PassKit/Assets.xcassets/AppIcon.appiconset/512@1x.png?raw=true" width="120" alt="PassKit Logo">
 </p>
 
 <h1 align="center">PassKit</h1>
@@ -66,7 +66,7 @@ These tools helped streamline development and improve clarity without altering t
 
 ## 🛡 License
 
-[MIT](https://github.com/VelisCore/PassKit/blob/main/LICENSE) — do what you want, just give credit.
+[MIT](https://github.com/Velyzo/PassKit/blob/main/LICENSE) — do what you want, just give credit.
 
 ---
 
